@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply font-sans antialiased;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* React Quill dark mode overrides */
+.dark .ql-toolbar {
+  @apply bg-gray-800 border-gray-700;
+}
+
+.dark .ql-toolbar .ql-stroke {
+  stroke: #9ca3af;
+}
+
+.dark .ql-toolbar .ql-fill {
+  fill: #9ca3af;
+}
+
+.dark .ql-toolbar .ql-picker-label {
+  @apply text-gray-400;
+}
+
+.dark .ql-container {
+  @apply bg-gray-900 border-gray-700 text-gray-100;
+}
+
+.dark .ql-editor.ql-blank::before {
+  @apply text-gray-600;
+}
+
+.ql-editor {
+  min-height: 350px;
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+/* Prose content styles for post detail */
+.prose img {
+  @apply rounded-xl;
+}
+
+.prose pre {
+  @apply rounded-xl;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+/* Slide-in animation for toasts */
+@keyframes slide-in-from-right-5 {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-in {
+  animation-duration: 200ms;
+  animation-fill-mode: both;
+}
+
+.slide-in-from-right-5 {
+  animation-name: slide-in-from-right-5;
+}
