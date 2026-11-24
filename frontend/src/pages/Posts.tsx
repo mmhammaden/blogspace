@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Search, X } from "lucide-react";
 import api from "../api/axios";
 import { Post, PaginatedPosts } from "../types";
@@ -6,53 +6,45 @@ import { PostCard } from "../components/posts/PostCard";
 import { LoadingSpinner } from "../components/ui/LoadingSpinner";
 import { EmptyState } from "../components/ui/EmptyState";
 
-export default function Posts() {
-  const [data, setData] = useState<PaginatedPosts | null>(null);
-  const [searchResults, setSearchResults] = useState<Post[] | null>(null);
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
+type PostResponse = PaginatedPosts | { posts: Post[] };
+type PostRequest = { page: number; query: string };
+type PostResult = { request: PostRequest; data: PostResponse | null };
 
-  const fetchPosts = useCallback(async (p: number) => {
-    setLoading(true);
-    try {
-      const { data: res } = await api.get(`/posts?page=${p}&limit=9`);
-      setData(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+export default function Posts() {
+  const [query, setQuery] = useState("");
+  const [request, setRequest] = useState<PostRequest>({ page: 1, query: "" });
+  const [result, setResult] = useState<PostResult | null>(null);
+  const { page, query: submittedQuery } = request;
 
   useEffect(() => {
-    fetchPosts(page);
-  }, [page, fetchPosts]);
+    const controller = new AbortController();
+    const endpoint = request.query ? "/posts/search" : "/posts";
+    const params = request.query ? { q: request.query } : { page: request.page, limit: 9 };
+    void api.get<PostResponse>(endpoint, { params, signal: controller.signal })
+      .then(({ data }) => {
+        if (!controller.signal.aborted) setResult({ request, data });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResult({ request, data: null });
+      });
 
-  const handleSearch = async (e: React.FormEvent) => {
+    return () => controller.abort();
+  }, [request]);
+
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) {
-      setSearchResults(null);
-      return;
-    }
-    setSearching(true);
-    try {
-      const { data: res } = await api.get(`/posts/search?q=${encodeURIComponent(query)}`);
-      setSearchResults(res.posts);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSearching(false);
-    }
+    setRequest({ page, query: query.trim() });
   };
 
   const clearSearch = () => {
     setQuery("");
-    setSearchResults(null);
+    if (submittedQuery) setRequest({ page, query: "" });
   };
 
-  const displayPosts = searchResults ?? data?.posts ?? [];
+  const currentResult = result?.request === request ? result : null;
+  const data = currentResult?.data;
+  const displayPosts = data?.posts ?? [];
+  const pagination = !submittedQuery && data && "totalPages" in data ? data : null;
 
   return (
     <div className="space-y-8">
@@ -65,40 +57,50 @@ export default function Posts() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
+              aria-label="Search posts"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search posts..."
               className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
             />
-            {query && (
-              <button type="button" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            {(query || submittedQuery) && (
+              <button type="button" aria-label="Clear search" onClick={clearSearch} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                 <X className="w-4 h-4" />
               </button>
             )}
           </div>
           <button
             type="submit"
-            disabled={searching}
-            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+            className="px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium rounded-xl transition-colors"
           >
-            {searching ? "..." : "Search"}
+            Search
           </button>
         </form>
       </div>
 
-      {searchResults !== null && (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{query}"
-          <button onClick={clearSearch} className="ml-2 text-brand-600 dark:text-brand-400 hover:underline">Clear</button>
+      {submittedQuery && data && (
+        <p role="status" className="text-sm text-gray-500 dark:text-gray-400">
+          {displayPosts.length} result{displayPosts.length !== 1 ? "s" : ""} for "{submittedQuery}"
         </p>
       )}
 
-      {loading ? (
+      {!currentResult ? (
         <LoadingSpinner size="lg" />
+      ) : !data ? (
+        <div className="space-y-3 py-8 text-center">
+          <p role="alert">{submittedQuery ? "Could not search posts." : "Could not load posts."}</p>
+          <button
+            type="button"
+            onClick={() => setRequest({ ...request })}
+            className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
+          >
+            Try again
+          </button>
+        </div>
       ) : displayPosts.length === 0 ? (
         <EmptyState
-          title={searchResults !== null ? "No results found" : "No posts yet"}
-          description={searchResults !== null ? `Try a different search term.` : "Check back soon for new content."}
+          title={submittedQuery ? "No results found" : "No posts yet"}
+          description={submittedQuery ? "Try a different search term." : "Check back soon for new content."}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -109,21 +111,21 @@ export default function Posts() {
       )}
 
       {/* Pagination */}
-      {!searchResults && data && data.totalPages > 1 && (
+      {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-4">
           <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={() => setRequest({ page: page - 1, query: "" })}
             disabled={page === 1}
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             Previous
           </button>
           <span className="text-sm text-gray-500 dark:text-gray-400">
-            Page {data.page} of {data.totalPages}
+            Page {pagination.page} of {pagination.totalPages}
           </span>
           <button
-            onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
-            disabled={page === data.totalPages}
+            onClick={() => setRequest({ page: page + 1, query: "" })}
+            disabled={page === pagination.totalPages}
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
             Next
